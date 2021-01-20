@@ -1,0 +1,21 @@
+name: indracore-archive
+version: "0.2.2"
+author: Selendra <info@selendra.org>
+about: Indexes the indracore and xelendra Networks
+args:
+    - config:
+        short: c
+        long: config
+        value_name: FILE
+        help: Sets a custom config file
+        takes_value: true
+        required: false
+    - chain:
+        long: chain
+        help: The chain to run substrate-archive for. One of xelendra, indracore. Defaults to indracore
+        takes_value: true
+        required: false
+    - verbose:
+        short: v
+        multiple: true
+        help: Sets the level of verbosity

@@ -13,8 +13,8 @@ serde = "1.0"
 toml = "0.5"
 
 sc-chain-spec = { git = "https://github.com/selendra/substrate", branch = "master" }
-indracore-service = { git = "https://github.com/selendra/indracore-dev", branch = "master" }
+indracore-service = { git = "https://github.com/selendra/indracore-dev", branch = "main" }
 
-substrate-archive = { path = "../../substrate-archive", features = ["logging"] }
-substrate-archive-common = { path = "../../substrate-archive-common" }
-substrate-archive-backend = { path = "../../substrate-archive-backend" }
+substrate-archive = { path = "../substrate-archive", features = ["logging"] }
+substrate-archive-common = { path = "../substrate-archive-common" }
+substrate-archive-backend = { path = "../substrate-archive-backend" }

@@ -2,5 +2,6 @@
 members = [
   "substrate-archive",
   "substrate-archive-backend",
-  "substrate-archive-common"
+  "substrate-archive-common",
+  "indracore-archive"
 ]

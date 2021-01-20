@@ -189,11 +189,11 @@ mod tests {
 	use crate::backend::test_util::harness;
 	use crate::{twox_128, StorageKey};
 	use codec::Decode;
-	use polkadot_service::Block;
+	use indracore_service::Block;
 	use primitive_types::H256;
 	use std::time::Instant;
 	// change this to run tests
-	const DB: &'static str = "/home/insipx/.local/share/polkadot/chains/ksmcc3/db";
+	const DB: &'static str = "/home/insipx/.local/share/indracore/chains/ksmcc3/db";
 
 	fn balances_freebalance_key() -> StorageKey {
 		let balances_key = twox_128(b"Balances").to_vec();

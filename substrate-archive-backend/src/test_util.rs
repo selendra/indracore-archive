@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use sp_api::ProvideRuntimeApi;
 
-use polkadot_service::{kusama_runtime as ksm_runtime, Block};
+use indracore_service::{kusama_runtime as ksm_runtime, Block};
 
 use crate::{
     backend,
@@ -43,10 +43,10 @@ pub fn client(
     };
 
     // get spec/runtime from node library
-    let spec = polkadot_service::chain_spec::kusama_config().unwrap();
+    let spec = indracore_service::chain_spec::kusama_config().unwrap();
     let archive = Archive::new(conf, spec).unwrap();
     let client = archive
-        .api_client::<ksm_runtime::RuntimeApi, polkadot_service::KusamaExecutor>()
+        .api_client::<ksm_runtime::RuntimeApi, indracore_service::KusamaExecutor>()
         .unwrap();
     client
 }

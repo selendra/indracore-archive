@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "substrate-archive",
+  "substrate-archive-backend",
+  "substrate-archive-common"
+]

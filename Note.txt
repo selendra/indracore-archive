@@ -1,0 +1,26 @@
+./target/release/indracore \
+  --base-path alice \
+  --chain==indracore-local \
+  --alice \
+  --port 30337 \
+  --ws-port 9947 \
+  --rpc-port 9937 \
+  --node-key 0000000000000000000000000000000000000000000000000000000000000001 \
+  --validator
+
+
+./target/release/indracore \
+  --base-path bob \
+  --chain==indracore-local \
+  --bob \
+  --port 30334 \
+  --ws-port 9946 \
+  --rpc-port 9934 \
+  --validator \
+  --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp
+
+
+./target/release/indracore \
+    --chain==indracore-local \
+    --pruning=archive \
+    --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp

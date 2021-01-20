@@ -85,7 +85,7 @@ fn get_spec(chain: &str) -> Result<Box<dyn ChainSpec>> {
 			Ok(Box::new(spec) as Box<dyn ChainSpec>)
 		}
 		"indracore"=> {
-			let spec = indracore_service::chain_spec::indracore_development_config().unwrap();
+			let spec = indracore_service::chain_spec::indracore_local_testnet_config().unwrap();
 			Ok(Box::new(spec) as Box<dyn ChainSpec>)
 		}
 		c => Err(anyhow!("unknown chain {}", c)),

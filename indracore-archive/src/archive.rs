@@ -60,6 +60,21 @@ pub fn run_archive<D: ReadOnlyDB + 'static>(config: Config) -> Result<Box<dyn Ar
 			.build()?;
 			Ok(Box::new(archive))
 		}
+		"indracore-local" => {
+			let archive = ArchiveBuilder::<Block, sel_rt::RuntimeApi, indracore_service::IndracoreExecutor, D> {
+				pg_url: config.psql_conf().map(|u| u.url()),
+				cache_size: config.cache_size(),
+				block_workers: config.block_workers(),
+				wasm_pages: config.wasm_pages(),
+				max_block_load: config.max_block_load(),
+				..ArchiveBuilder::default()
+			}
+			.chain_data_db(db_path)
+			.chain_spec(spec)
+			.build()?;
+			Ok(Box::new(archive))
+		}
+
 		"indracore" => {
 			let archive = ArchiveBuilder::<Block, sel_rt::RuntimeApi, indracore_service::IndracoreExecutor, D> {
 				pg_url: config.psql_conf().map(|u| u.url()),
@@ -84,8 +99,12 @@ fn get_spec(chain: &str) -> Result<Box<dyn ChainSpec>> {
 			let spec = indracore_service::chain_spec::xelendra_local_testnet_config().unwrap();
 			Ok(Box::new(spec) as Box<dyn ChainSpec>)
 		}
-		"indracore"=> {
+		"indracore-local"=> {
 			let spec = indracore_service::chain_spec::indracore_local_testnet_config().unwrap();
+			Ok(Box::new(spec) as Box<dyn ChainSpec>)
+		}
+		"indracore"=> {
+			let spec = indracore_service::chain_spec::indracore_config().unwrap();
 			Ok(Box::new(spec) as Box<dyn ChainSpec>)
 		}
 		c => Err(anyhow!("unknown chain {}", c)),

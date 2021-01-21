@@ -35,6 +35,7 @@ struct TomlConfig {
 	db_user: Option<String>,
 	db_pass: Option<String>,
 	xelendra_db: Option<String>,
+	indracore_local_db: Option<String>,
 	indracore_db: Option<String>,
 }
 
@@ -42,6 +43,7 @@ impl TomlConfig {
 	pub fn migration_conf(&self, chain: &str) -> MigrationConfig {
 		let name = match chain.to_ascii_lowercase().as_str() {
 			"xelendra" | "xel" => self.xelendra_db.clone(),
+			"indracore-local"=> self.indracore_local_db.clone(),
 			"indracore"=> self.indracore_db.clone(),
 			_ => panic!("Chain not specified"),
 		};

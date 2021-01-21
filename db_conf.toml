@@ -11,7 +11,7 @@
 # if the db path for indracore is /home/$user/.local/share/indracore/chains/indracore/db
 # and the db path for xelendra is /home/$user/.local/share/indracore/chains/ksmcc3/db
 # then the path only needs to be /home/$user/.local/share/indracore/
-indracore_path = "/home/msi/.local/share/indracore"
+indracore_path = "/home/$user/.local/share/indracore"
 
 # How much should the read-only database keep in cache (MB) (required)
 cache_size = 128
@@ -40,3 +40,4 @@ db_pass = "123"
 # Names for the PostgreSQL databases for different chains
 xelendra_db = "xelendradb"
 indracore_db = "indracoredb"
+indracore_testnet_db = "indracore_localdb"

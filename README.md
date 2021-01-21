@@ -52,6 +52,5 @@ For macOS and Linux, a warning message will be raised on the startup when there 
 
 #### License
 <sup>
-The code within this repository is licensed under the <a href="https://github.com/paritytech/substrate-archive/blob/master/LICENSE</a>.
-Please <a href="https://www.parity.io/contact/">contact us</a> if you have questions about the licensing of our products.
+The part of code within this repository is licensed under the [substrate-archive](https://github.com/paritytech/substrate-archive)
 </sup>

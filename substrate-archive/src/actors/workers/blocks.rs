@@ -133,7 +133,16 @@ where
 	/// Crawl up to `max_block_load` blocks that are greater than the last max
 	async fn crawl(&mut self) -> Result<Vec<Block<B>>> {
 		let copied_last_max = self.last_max;
-		let max_to_collect = copied_last_max + self.max_block_load;
+		let blocks = self
+			.collect_blocks(move |n| {
+				if copied_last_max == 0 {
+					// includes the genesis block
+					n >= copied_last_max && n <= max_to_collect
+				} else {
+					n > copied_last_max && n <= max_to_collect
+				}
+			}).await?; 
+
 		let blocks = self.collect_blocks(move |n| n > copied_last_max && n <= max_to_collect).await?;
 		self.last_max = blocks
 			.iter()

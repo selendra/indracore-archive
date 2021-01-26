@@ -47,46 +47,40 @@ pub fn run_archive<D: ReadOnlyDB + 'static>(config: Config) -> Result<Box<dyn Ar
 
 	match config.cli().chain.to_ascii_lowercase().as_str() {
 		"xelendra" | "xel" => {
-			let archive = ArchiveBuilder::<Block, xel_rt::RuntimeApi, indracore_service::XelendraExecutor, D> {
-				pg_url: config.psql_conf().map(|u| u.url()),
-				cache_size: config.cache_size(),
-				block_workers: config.block_workers(),
-				wasm_pages: config.wasm_pages(),
-				max_block_load: config.max_block_load(),
-				..ArchiveBuilder::default()
-			}
-			.chain_data_db(db_path)
-			.chain_spec(spec)
-			.build()?;
+			let archive = ArchiveBuilder::<Block, xel_rt::RuntimeApi, indracore_service::XelendraExecutor, D>::default()
+				.chain_spec(spec)
+				.chain_data_path(Some(db_path))
+				.pg_url(config.psql_conf().map(|u| u.url()))
+				.cache_size(config.cache_size())
+				.block_workers(config.block_workers())
+				.wasm_pages(config.wasm_pages())
+				.max_block_load(config.max_block_load())
+				.build()?; 
 			Ok(Box::new(archive))
 		}
 		"indracore-local" => {
-			let archive = ArchiveBuilder::<Block, sel_rt::RuntimeApi, indracore_service::IndracoreExecutor, D> {
-				pg_url: config.psql_conf().map(|u| u.url()),
-				cache_size: config.cache_size(),
-				block_workers: config.block_workers(),
-				wasm_pages: config.wasm_pages(),
-				max_block_load: config.max_block_load(),
-				..ArchiveBuilder::default()
-			}
-			.chain_data_db(db_path)
-			.chain_spec(spec)
-			.build()?;
+			let archive = ArchiveBuilder::<Block, sel_rt::RuntimeApi, indracore_service::IndracoreExecutor, D>::default()
+				.chain_spec(spec)
+				.chain_data_path(Some(db_path))
+				.pg_url(config.psql_conf().map(|u| u.url()))
+				.cache_size(config.cache_size())
+				.block_workers(config.block_workers())
+				.wasm_pages(config.wasm_pages())
+				.max_block_load(config.max_block_load())
+				.build()?; 
 			Ok(Box::new(archive))
 		}
 
 		"indracore" => {
-			let archive = ArchiveBuilder::<Block, sel_rt::RuntimeApi, indracore_service::IndracoreExecutor, D> {
-				pg_url: config.psql_conf().map(|u| u.url()),
-				cache_size: config.cache_size(),
-				block_workers: config.block_workers(),
-				wasm_pages: config.wasm_pages(),
-				max_block_load: config.max_block_load(),
-				..ArchiveBuilder::default()
-			}
-			.chain_data_db(db_path)
-			.chain_spec(spec)
-			.build()?;
+			let archive = ArchiveBuilder::<Block, sel_rt::RuntimeApi, indracore_service::IndracoreExecutor, D>::default()
+				.chain_spec(spec)
+				.chain_data_path(Some(db_path))
+				.pg_url(config.psql_conf().map(|u| u.url()))
+				.cache_size(config.cache_size())
+				.block_workers(config.block_workers())
+				.wasm_pages(config.wasm_pages())
+				.max_block_load(config.max_block_load())
+				.build()?; 
 			Ok(Box::new(archive))
 		}
 		c => Err(anyhow!("unknown chain {}", c)),

@@ -39,7 +39,7 @@ impl CliOpts {
 			3 => log::LevelFilter::Debug,
 			4 | _ => log::LevelFilter::Trace,
 		};
-		let chain = matches.value_of("chain").unwrap_or("polkadot").to_string();
+		let chain = matches.value_of("chain").unwrap_or("indracore").to_string();
 
 		CliOpts { file: file.map(PathBuf::from), log_level, log_num, chain } 
 	}

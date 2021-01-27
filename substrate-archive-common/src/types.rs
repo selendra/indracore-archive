@@ -147,4 +147,3 @@ pub struct Die;
 impl Message for Die {
 	type Result = Result<()>;
 }
-

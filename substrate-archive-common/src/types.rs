@@ -16,14 +16,10 @@
 
 use codec::{Decode, Encode};
 use serde::{Deserialize, Serialize};
-use xtra::Message;
-
 use sp_runtime::{generic::SignedBlock, traits::Block as BlockT};
 use sp_storage::{StorageData, StorageKey};
 
-use crate::error::Result;
-
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Encode, Decode, Debug, Clone)]
 pub struct Block<B: BlockT> {
 	pub inner: SignedBlock<B>,
 	pub spec: u32,
@@ -33,10 +29,6 @@ impl<B: BlockT> Block<B> {
 	pub fn new(block: SignedBlock<B>, spec: u32) -> Self {
 		Self { inner: block, spec }
 	}
-}
-
-impl<B: BlockT> Message for Block<B> {
-	type Result = ();
 }
 
 #[derive(Debug)]
@@ -59,10 +51,6 @@ impl Metadata {
 	}
 }
 
-impl Message for Metadata {
-	type Result = ();
-}
-
 /// NewType for committing many blocks to the database at once
 #[derive(Debug)]
 pub struct BatchBlock<B: BlockT> {
@@ -79,12 +67,8 @@ impl<B: BlockT> BatchBlock<B> {
 	}
 }
 
-impl<B: BlockT> Message for BatchBlock<B> {
-	type Result = ();
-}
-
 /// NewType for Storage Data
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Storage<Block: BlockT> {
 	hash: Block::Hash,
 	block_num: u32,
@@ -118,33 +102,3 @@ impl<Block: BlockT> Storage<Block> {
 		self.changes.as_slice()
 	}
 }
-
-impl<Block: BlockT> Message for Storage<Block> {
-	type Result = ();
-}
-
-#[derive(Debug)]
-pub struct BatchStorage<B: BlockT> {
-	pub inner: Vec<Storage<B>>,
-}
-
-impl<B: BlockT> BatchStorage<B> {
-	pub fn new(storages: Vec<Storage<B>>) -> Self {
-		Self { inner: storages }
-	}
-
-	pub fn inner(&self) -> &Vec<Storage<B>> {
-		&self.inner
-	}
-}
-
-impl<B: BlockT> Message for BatchStorage<B> {
-	type Result = ();
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Die;
-impl Message for Die {
-	type Result = Result<()>;
-}
-

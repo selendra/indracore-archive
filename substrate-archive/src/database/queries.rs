@@ -16,42 +16,40 @@
 
 //! Common Sql queries on Archive Database abstracted into rust functions
 
-use std::convert::TryFrom;
-
+use super::BlockModel;
 use hashbrown::HashSet;
 use serde::{de::DeserializeOwned, Deserialize};
-use sqlx::PgConnection;
-
 use sp_runtime::traits::Block as BlockT;
-
-use substrate_archive_common::{models::BlockModel, Result};
+use sqlx::PgConnection;
+use std::convert::TryFrom;
+use substrate_archive_common::Result;
 
 /// Return type of queries that `SELECT version`
 struct Version {
 	version: i32,
 }
 
-/// Return type of queries that `SELECT missing_num ... FROM ... GENERATE_SERIES(a, z)`
+/// Return type of querys that `SELECT missing_num ... FROM ... GENERATE_SERIES(a, z)`
 pub struct Series {
 	missing_num: Option<i32>,
 }
 
-/// Return type of queries that `SELECT MAX(int)`
+/// Return type of querys that `SELECT MAX(int)`
 struct Max {
 	max: Option<i32>,
 }
 
-/// Return type of queries that `SELECT EXISTS`
+/// Return type querys that `SELECT EXISTS`
 struct DoesExist {
 	exists: Option<bool>,
 }
 
-// Return type of queries that `SELECT block_num`
+// Return type of querys that `SELECT block_num`
 struct BlockNum {
 	block_num: i32,
 }
 
-// Return type of queries that `SELECT data`
+// Return type of querys that `SELECT data`
 struct Bytes {
 	data: Vec<u8>,
 }
@@ -88,7 +86,7 @@ pub(crate) async fn missing_blocks_min_max(
 	.collect())
 }
 
-/// Get the maximum block number from the relational database
+/// Get the maximium block number from the relational database
 pub(crate) async fn max_block(conn: &mut PgConnection) -> Result<Option<u32>> {
 	let max = sqlx::query_as!(Max, "SELECT MAX(block_num) FROM blocks").fetch_one(conn).await?;
 	Ok(max.max.map(|v| v as u32))
@@ -220,4 +218,6 @@ pub(crate) async fn get_all_blocks<B: BlockT + DeserializeOwned>(
 #[cfg(test)]
 mod tests {
 	//! Must be connected to a postgres database
+	use super::*;
+	// use diesel::test_transaction;
 }

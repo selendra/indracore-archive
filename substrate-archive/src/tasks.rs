@@ -17,12 +17,7 @@
 //! Background tasks that take their parameters from Postgres, and are either
 //! executed on a threadpool or spaned onto the executor.
 
-use std::marker::PhantomData;
-use std::panic::AssertUnwindSafe;
-use std::sync::Arc;
-
-use xtra::prelude::*;
-
+use super::actors::StorageAggregator;
 use sc_client_api::backend;
 use serde::de::DeserializeOwned;
 use sp_api::{ApiExt, ConstructRuntimeApi};
@@ -31,11 +26,12 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header, NumberFor},
 };
-
+use std::marker::PhantomData;
+use std::panic::AssertUnwindSafe;
+use std::sync::Arc;
 use substrate_archive_backend::{ApiAccess, BlockExecutor, ReadOnlyBackend as Backend};
 use substrate_archive_common::{types::Storage, ReadOnlyDB};
-
-use crate::actors::StorageAggregator;
+use xtra::prelude::*;
 
 /// The environment passed to each task
 pub struct Environment<B, R, C, D>
@@ -94,7 +90,10 @@ where
 		"Executing Block: {}:{}, version {}",
 		block.header().hash(),
 		block.header().number(),
-		env.client.runtime_version_at(&BlockId::Hash(block.hash())).map_err(|e| format!("{:?}", e))?.spec_version,
+		env.client
+			.runtime_version_at(&BlockId::Hash(block.header().hash()))
+			.map_err(|e| format!("{:?}", e))?
+			.spec_version,
 	);
 	let now = std::time::Instant::now();
 	let block = BlockExecutor::new(api, &env.backend, block)?.block_into_storage()?;

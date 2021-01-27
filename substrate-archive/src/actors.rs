@@ -19,37 +19,29 @@
 mod actor_pool;
 mod workers;
 
+pub use self::actor_pool::ActorPool;
+use self::workers::GetState;
+pub use self::workers::{BlocksIndexer, DatabaseActor, StorageAggregator};
+use super::{
+	database::{queries, Channel, Listener},
+	sql_block_builder::BlockBuilder as SqlBlockBuilder,
+	tasks::Environment,
+	traits::Archive,
+};
+use coil::Job as _;
+use futures::FutureExt;
+use hashbrown::HashSet;
+use sc_client_api::backend;
+use serde::de::DeserializeOwned;
+use sp_api::{ApiExt, ConstructRuntimeApi};
+use sp_block_builder::BlockBuilder as BlockBuilderApi;
+use sp_runtime::traits::{Block as BlockT, Header as _, NumberFor};
 use std::marker::PhantomData;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
-use std::time::Duration;
-
-use coil::Job as _;
-use futures::{future::BoxFuture, FutureExt};
-use hashbrown::HashSet;
-use serde::de::DeserializeOwned;
-use xtra::{prelude::*, spawn::Smol, Disconnected};
-
-use sc_client_api::backend;
-use sp_api::{ApiExt, ConstructRuntimeApi};
-use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::Error as BlockchainError;
-use sp_runtime::traits::{Block as BlockT, Header as _, NumberFor};
-
 use substrate_archive_backend::{ApiAccess, Meta, ReadOnlyBackend};
-use substrate_archive_common::{types::Die, ReadOnlyDB, Result};
-
-use self::workers::GetState;
-pub use self::{
-	actor_pool::ActorPool,
-	workers::{BlocksIndexer, DatabaseActor, StorageAggregator},
-};
-use crate::{
-	archive::Archive,
-	database::{queries, Channel, Listener},
-	sql_block_builder::SqlBlockBuilder,
-	tasks::Environment,
-};
+pub use substrate_archive_common::{msg, ReadOnlyDB, Result};
+use xtra::prelude::*;
 
 // TODO: Split this up into two objects
 // System should be a factory that produces objects that should be spawned
@@ -114,7 +106,7 @@ where
 {
 	storage: Address<workers::StorageAggregator<B>>,
 	blocks: Address<workers::BlocksIndexer<B, D>>,
-	metadata: Address<workers::MetadataActor<B>>,
+	metadata: Address<workers::Metadata<B>>,
 	db_pool: Address<ActorPool<DatabaseActor<B>>>,
 }
 
@@ -140,15 +132,15 @@ where
 	D: ReadOnlyDB + 'static,
 	B: BlockT + Unpin + DeserializeOwned,
 	R: ConstructRuntimeApi<B, C> + Send + Sync + 'static,
-	R::RuntimeApi: BlockBuilderApi<B, Error = BlockchainError>
-		+ sp_api::Metadata<B, Error = BlockchainError>
+	R::RuntimeApi: BlockBuilderApi<B, Error = sp_blockchain::Error>
+		+ sp_api::Metadata<B, Error = sp_blockchain::Error>
 		+ ApiExt<B, StateBackend = backend::StateBackendFor<ReadOnlyBackend<B, D>, B>>
 		+ Send
 		+ Sync
 		+ 'static,
 	C: ApiAccess<B, ReadOnlyBackend<B, D>, R> + 'static,
 	NumberFor<B>: Into<u32> + From<u32> + Unpin,
-	B::Hash: Unpin,
+	B::Hash: From<primitive_types::H256> + Unpin,
 	B::Header: serde::de::DeserializeOwned,
 {
 	// TODO: Return a reference to the Db pool.
@@ -179,7 +171,7 @@ where
 		self.start_tx.send(()).expect("Could not start actors");
 	}
 
-	/// Start the actors and begin driving their execution
+	/// Start the actors and begin driving tself.pg_poolheir execution
 	pub fn start(
 		ctx: ActorContext<B, D>,
 		client: Arc<C>,
@@ -190,14 +182,14 @@ where
 		let handle = jod_thread::spawn(move || {
 			// block until we receive the message to start
 			let _ = rx_start.recv();
-			smol::block_on(Self::main_loop(ctx, rx_kill, client))?;
+			smol::run(Self::main_loop(ctx, rx_kill, client))?;
 			Ok(())
 		});
 
 		(tx_start, tx_kill, handle)
 	}
 
-	async fn main_loop(ctx: ActorContext<B, D>, rx: flume::Receiver<()>, client: Arc<C>) -> Result<()> {
+	async fn main_loop(ctx: ActorContext<B, D>, mut rx: flume::Receiver<()>, client: Arc<C>) -> Result<()> {
 		let actors = Self::spawn_actors(ctx.clone()).await?;
 		let pool = actors.db_pool.send(GetState::Pool.into()).await?.await?.pool();
 		let listener = Self::init_listeners(ctx.pg_url()).await?;
@@ -209,8 +201,7 @@ where
 		let runner = coil::Runner::builder(env, crate::TaskExecutor, &pool)
 			.register_job::<crate::tasks::execute_block::Job<B, R, C, D>>()
 			.num_threads(ctx.workers)
-			.timeout(Duration::from_secs(20))
-			.max_tasks(64)
+			.max_tasks(500)
 			.build()?;
 
 		loop {
@@ -219,7 +210,7 @@ where
 			futures::select! {
 				t = tasks => {
 					if t? == 0 {
-						smol::Timer::after(std::time::Duration::from_millis(256)).await;
+						smol::Timer::new(std::time::Duration::from_millis(3600)).await;
 					}
 				},
 				_ = rx.recv_async() => break,
@@ -232,25 +223,17 @@ where
 
 	async fn spawn_actors(ctx: ActorContext<B, D>) -> Result<Actors<B, D>> {
 		let db = workers::DatabaseActor::<B>::new(ctx.pg_url().into()).await?;
-		let db_pool = actor_pool::ActorPool::new(db, 4).create(None).spawn(&mut Smol::Global);
-		let storage = workers::StorageAggregator::new(db_pool.clone()).create(None).spawn(&mut Smol::Global);
-		let metadata = workers::MetadataActor::new(db_pool.clone(), ctx.meta().clone())
-			.await?
-			.create(None)
-			.spawn(&mut Smol::Global);
-		let blocks =
-			workers::BlocksIndexer::new(ctx, db_pool.clone(), metadata.clone()).create(None).spawn(&mut Smol::Global);
+		let db_pool = actor_pool::ActorPool::new(db, 8).spawn();
+		let storage = workers::StorageAggregator::new(db_pool.clone()).spawn();
+		let metadata = workers::Metadata::new(db_pool.clone(), ctx.meta().clone()).await?.spawn();
+		let blocks = workers::BlocksIndexer::new(ctx, db_pool.clone(), metadata.clone()).spawn();
 		Ok(Actors { storage, blocks, metadata, db_pool })
 	}
 
 	async fn kill_actors(actors: Actors<B, D>) -> Result<()> {
-		let fut: Vec<BoxFuture<'_, Result<Result<()>, Disconnected>>> = vec![
-			Box::pin(actors.storage.send(Die)),
-			Box::pin(actors.blocks.send(Die)),
-			Box::pin(actors.metadata.send(Die)),
-		];
+		let fut = vec![actors.storage.send(msg::Die), actors.blocks.send(msg::Die), actors.metadata.send(msg::Die)];
 		futures::future::join_all(fut).await;
-		let _ = actors.db_pool.send(Die.into()).await?.await;
+		let _ = actors.db_pool.send(msg::Die.into()).await?.await;
 		Ok(())
 	}
 
@@ -273,6 +256,7 @@ where
 	/// from the task queue.
 	/// If any are found, they are re-queued.
 	async fn restore_missing_storage(conn: &mut sqlx::PgConnection) -> Result<()> {
+		log::info!("Restoring missing storage entries...");
 		let blocks: HashSet<u32> = queries::get_all_blocks::<B>(conn)
 			.await?
 			.map(|b| Ok((*b?.header().number()).into()))
@@ -291,7 +275,7 @@ where
 				.into_iter()
 				.map(|b| crate::tasks::execute_block::<B, R, C, D>(b.inner.block, PhantomData))
 				.collect();
-		log::info!("Restoring {} missing storage entries. This could take a few minutes...", jobs.len());
+		log::info!("Restoring {} missing storage entries", jobs.len());
 		coil::JobExt::enqueue_batch(jobs, &mut *conn).await?;
 		log::info!("Storage restored");
 		Ok(())
@@ -313,7 +297,7 @@ where
 		+ 'static,
 	C: ApiAccess<B, ReadOnlyBackend<B, D>, R> + 'static,
 	NumberFor<B>: Into<u32> + From<u32> + Unpin,
-	B::Hash: Unpin,
+	B::Hash: From<primitive_types::H256> + Unpin,
 	B::Header: serde::de::DeserializeOwned,
 {
 	fn drive(&mut self) -> Result<()> {
@@ -323,7 +307,7 @@ where
 
 	async fn block_until_stopped(&self) {
 		loop {
-			smol::Timer::after(std::time::Duration::from_secs(1)).await;
+			smol::Timer::new(std::time::Duration::from_secs(1)).await;
 		}
 	}
 

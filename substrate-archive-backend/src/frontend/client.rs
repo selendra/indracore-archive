@@ -21,10 +21,8 @@
 //! It's recommended to use the backend (ReadOnlyBackend) for anything that requires getting blocks, querying
 //! storage, or similar operations. Client usage should be reserved for calling into the Runtime
 
-use std::{marker::PhantomData, panic::UnwindSafe, sync::Arc};
-
+use crate::{ReadOnlyBackend, TrieState};
 use codec::{Decode, Encode};
-
 use sc_client_api::{backend::Backend as _, execution_extensions::ExecutionExtensions, CallExecutor};
 use sc_executor::RuntimeVersion;
 use sp_api::{ApiRef, CallApiAt, CallApiAtParams, ConstructRuntimeApi, Core as CoreApi, Metadata, ProvideRuntimeApi};
@@ -34,10 +32,8 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, One},
 };
-
-use substrate_archive_common::{ArchiveError, ReadOnlyDB, Result};
-
-use crate::read_only_backend::{ReadOnlyBackend, TrieState};
+use std::{marker::PhantomData, panic::UnwindSafe, sync::Arc};
+use substrate_archive_common::{Error, ReadOnlyDB, Result};
 
 // FIXME: should use the trait sp_version::GetRuntimeVersion
 // but that returns a String for an error
@@ -78,7 +74,7 @@ where
 	}
 
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> Result<RuntimeVersion> {
-		self.executor.runtime_version(id).map_err(ArchiveError::from)
+		self.executor.runtime_version(id).map_err(Error::from)
 	}
 
 	/// get the backend for this client instance
@@ -146,12 +142,13 @@ where
 	type StateBackend = TrieState<Block, D>;
 
 	fn call_api_at<
+		'a,
 		R: Encode + Decode + PartialEq,
 		NC: FnOnce() -> std::result::Result<R, String> + UnwindSafe,
 		C: CoreApi<Block, Error = sp_blockchain::Error>,
 	>(
 		&self,
-		params: CallApiAtParams<Block, C, NC, TrieState<Block, D>>,
+		params: CallApiAtParams<'a, Block, C, NC, TrieState<Block, D>>,
 	) -> sp_blockchain::Result<NativeOrEncoded<R>> {
 		let core_api = params.core_api;
 		let at = params.at;
@@ -164,7 +161,7 @@ where
 			params.function,
 			&params.arguments,
 			params.overlayed_changes,
-			// params.offchain_changes,
+			params.offchain_changes,
 			Some(params.storage_transaction_cache),
 			params.initialize_block,
 			manager,
@@ -175,6 +172,6 @@ where
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
-		self.runtime_version_at(at).map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))
+		self.runtime_version_at(at).map_err(|e| sp_blockchain::Error::Msg(e.to_string()))
 	}
 }

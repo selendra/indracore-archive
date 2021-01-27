@@ -16,10 +16,9 @@
 
 //! Implements Blockchain Backend (and required associated traits) for ReadOnlyBackend type
 
-use std::sync::Arc;
-
+use super::ReadOnlyBackend;
+use crate::util::{self, columns};
 use codec::Decode;
-
 use sp_blockchain::{
 	Backend as BlockchainBackend, BlockStatus, Cache, CachedHeaderMetadata, Error as BlockchainError, HeaderBackend,
 	HeaderMetadata, Info,
@@ -29,23 +28,20 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	Justification,
 };
-
+use std::sync::Arc;
 use substrate_archive_common::ReadOnlyDB;
-
-use crate::read_only_backend::ReadOnlyBackend;
-use crate::util::{self, columns};
 
 type ChainResult<T> = Result<T, BlockchainError>;
 
 impl<Block: BlockT, D: ReadOnlyDB> BlockchainBackend<Block> for ReadOnlyBackend<Block, D> {
 	fn body(&self, id: BlockId<Block>) -> ChainResult<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		let res = util::read_db::<Block, D>(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)
-			.map_err(|e| BlockchainError::Backend(e.to_string()))?;
+			.map_err(|e| BlockchainError::Msg(e.to_string()))?;
 
 		match res {
 			Some(body) => match Decode::decode(&mut &body[..]) {
 				Ok(body) => Ok(Some(body)),
-				Err(_) => Err(BlockchainError::Backend("Could not decode extrinsics".into())),
+				Err(_) => Err(BlockchainError::Msg("Could not decode extrinsics".into())),
 			},
 			None => Ok(None),
 		}
@@ -53,12 +49,12 @@ impl<Block: BlockT, D: ReadOnlyDB> BlockchainBackend<Block> for ReadOnlyBackend<
 
 	fn justification(&self, id: BlockId<Block>) -> ChainResult<Option<Justification>> {
 		let res = util::read_db::<Block, D>(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)
-			.map_err(|e| BlockchainError::Backend(e.to_string()))?;
+			.map_err(|e| BlockchainError::Msg(e.to_string()))?;
 
 		match res {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Ok(justification) => Ok(Some(justification)),
-				Err(_) => Err(BlockchainError::JustificationDecode),
+				Err(_) => Err(BlockchainError::Msg("Could not decode block justification".into())),
 			},
 			None => Ok(None),
 		}
@@ -98,7 +94,7 @@ impl<Block: BlockT, D: ReadOnlyDB> BlockchainBackend<Block> for ReadOnlyBackend<
 impl<Block: BlockT, D: ReadOnlyDB> HeaderBackend<Block> for ReadOnlyBackend<Block, D> {
 	fn header(&self, id: BlockId<Block>) -> ChainResult<Option<Block::Header>> {
 		util::read_header::<Block, D>(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
-			.map_err(|e| BlockchainError::Backend(e.to_string()))
+			.map_err(|e| BlockchainError::Msg(e.to_string()))
 	}
 
 	fn info(&self) -> Info<Block> {

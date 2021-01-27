@@ -15,31 +15,29 @@
 // along with substrate-archive.  If not, see <http://www.gnu.org/licenses/>.
 
 mod client;
-
-use std::sync::Arc;
-
-use futures::{future::BoxFuture, task::SpawnExt};
-
+mod executor;
+pub use self::client::{Client, GetMetadata, GetRuntimeVersion};
+use self::executor::ArchiveExecutor;
+use futures::{task::SpawnExt, Future};
 use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	ExecutionStrategy,
 };
 use sc_executor::{NativeExecutionDispatch, NativeExecutor, WasmExecutionMethod};
-use sc_service::LocalCallExecutor;
 use sp_api::ConstructRuntimeApi;
 use sp_core::traits::SpawnNamed;
 use sp_runtime::traits::{BlakeTwo256, Block as BlockT};
+use std::sync::Arc;
+use substrate_archive_common::{Error as ArchiveError, ReadOnlyDB};
 
-use substrate_archive_common::{ArchiveError, ReadOnlyDB};
-
-pub use self::client::{Client, GetMetadata, GetRuntimeVersion};
-use crate::{read_only_backend::ReadOnlyBackend, RuntimeApiCollection};
+use super::{ReadOnlyBackend, RuntimeApiCollection};
 
 /// Archive Client Condensed Type
 pub type TArchiveClient<TBl, TRtApi, TExecDisp, D> = Client<TFullCallExecutor<TBl, TExecDisp, D>, TBl, TRtApi, D>;
 
 /// Full client call executor type.
-type TFullCallExecutor<TBl, TExecDisp, D> = LocalCallExecutor<ReadOnlyBackend<TBl, D>, NativeExecutor<TExecDisp>>;
+type TFullCallExecutor<TBl, TExecDisp, D> =
+	self::executor::ArchiveExecutor<ReadOnlyBackend<TBl, D>, NativeExecutor<TExecDisp>>;
 
 pub fn runtime_api<Block, Runtime, Dispatch, D: ReadOnlyDB + 'static>(
 	db: Arc<D>,
@@ -61,19 +59,18 @@ where
 	let executor =
 		NativeExecutor::<Dispatch>::new(WasmExecutionMethod::Interpreted, Some(wasm_pages), block_workers as usize);
 
-	let executor =
-		LocalCallExecutor::new(backend.clone(), executor, Box::new(TaskExecutor::new()), Default::default())?;
+	let executor = ArchiveExecutor::new(backend.clone(), executor, TaskExecutor::new());
 
 	let client = Client::new(backend, executor, ExecutionExtensions::new(execution_strategies(), None))?;
 	Ok(client)
 }
 
 impl SpawnNamed for TaskExecutor {
-	fn spawn_blocking(&self, _: &'static str, fut: BoxFuture<'static, ()>) {
+	fn spawn(&self, _: &'static str, fut: std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
 		let _ = self.pool.spawn(fut);
 	}
 
-	fn spawn(&self, _: &'static str, fut: BoxFuture<'static, ()>) {
+	fn spawn_blocking(&self, _: &'static str, fut: std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
 		let _ = self.pool.spawn(fut);
 	}
 }

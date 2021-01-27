@@ -17,16 +17,11 @@
 //! Module that accepts individual storage entries and wraps them up into batch requests for
 //! Postgres
 
-use xtra::prelude::*;
-
+use super::{ActorPool, DatabaseActor};
+use crate::actors::msg::VecStorageWrap;
 use sp_runtime::traits::Block as BlockT;
-
-use substrate_archive_common::{
-	types::{BatchStorage, Die, Storage},
-	Result,
-};
-
-use crate::actors::{actor_pool::ActorPool, workers::database::DatabaseActor};
+use substrate_archive_common::{types::Storage, Result};
+use xtra::prelude::*;
 
 pub struct StorageAggregator<B: BlockT + Unpin> {
 	db: Address<ActorPool<DatabaseActor<B>>>,
@@ -40,17 +35,6 @@ where
 	pub fn new(db: Address<ActorPool<DatabaseActor<B>>>) -> Self {
 		Self { db, storage: Vec::with_capacity(500) }
 	}
-
-	async fn handle_storage(&mut self, ctx: &mut Context<Self>) -> Result<()> {
-		let storage = std::mem::take(&mut self.storage);
-		if !storage.is_empty() {
-			log::info!("Indexing {} blocks of storage entries", storage.len());
-			let send_result = self.db.send(BatchStorage::new(storage).into()).await?;
-			// handle_while the actual insert is happening, not the send
-			ctx.handle_while(self, send_result).await;
-		}
-		Ok(())
-	}
 }
 
 #[async_trait::async_trait]
@@ -60,9 +44,9 @@ where
 {
 	async fn started(&mut self, ctx: &mut Context<Self>) {
 		let addr = ctx.address().expect("Actor just started");
-		smol::spawn(async move {
+		smol::Task::spawn(async move {
 			loop {
-				smol::Timer::after(std::time::Duration::from_secs(1)).await;
+				smol::Timer::new(std::time::Duration::from_secs(1)).await;
 				if addr.send(SendStorage).await.is_err() {
 					break;
 				}
@@ -71,12 +55,11 @@ where
 		.detach();
 	}
 
-	async fn stopped(&mut self) {
+	async fn stopped(&mut self, _: &mut Context<Self>) {
 		let len = self.storage.len();
 		let storage = std::mem::take(&mut self.storage);
 		// insert any storage left in queue
-		let task = self.db.send(BatchStorage::new(storage).into()).await;
-
+		let task = self.db.send(VecStorageWrap(storage).into()).await;
 		match task {
 			Err(e) => {
 				log::info!("{} storage entries will be missing, {:?}", len, e);
@@ -100,9 +83,13 @@ impl<B: BlockT + Unpin> Handler<SendStorage> for StorageAggregator<B>
 where
 	B::Hash: Unpin,
 {
-	async fn handle(&mut self, _: SendStorage, ctx: &mut Context<Self>) {
-		if let Err(e) = self.handle_storage(ctx).await {
-			log::error!("{:?}", e)
+	async fn handle(&mut self, _: SendStorage, _: &mut Context<Self>) {
+		let storage = std::mem::take(&mut self.storage);
+		if !storage.is_empty() {
+			log::info!("Indexing storage {} bps", storage.len());
+			if let Err(e) = self.db.send(VecStorageWrap(storage).into()).await {
+				log::error!("{:?}", e);
+			}
 		}
 	}
 }
@@ -118,11 +105,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT + Unpin> Handler<Die> for StorageAggregator<B>
+impl<B: BlockT + Unpin> Handler<super::Die> for StorageAggregator<B>
 where
 	B::Hash: Unpin,
 {
-	async fn handle(&mut self, _: Die, ctx: &mut Context<Self>) -> Result<()> {
+	async fn handle(&mut self, _: super::Die, ctx: &mut Context<Self>) -> Result<()> {
 		ctx.stop();
 		Ok(())
 	}

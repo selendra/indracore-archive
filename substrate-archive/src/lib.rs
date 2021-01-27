@@ -23,11 +23,13 @@ mod database;
 mod migrations;
 mod sql_block_builder;
 mod tasks;
+mod traits;
 
-pub use self::actors::System;
-pub use self::archive::{Archive, ArchiveBuilder};
-pub use self::database::queries;
-pub use self::migrations::MigrationConfig;
+pub use actors::System;
+pub use archive::Builder as ArchiveBuilder;
+pub use database::queries;
+pub use migrations::MigrationConfig;
+pub use traits::Archive;
 
 #[cfg(feature = "logging")]
 pub use substrate_archive_common::util::init_logger;
@@ -36,7 +38,7 @@ pub use substrate_archive_common::util::init_logger;
 pub use sc_executor::native_executor_instance;
 pub use sp_blockchain::Error as BlockchainError;
 pub use sp_runtime::MultiSignature;
-pub use substrate_archive_common::ArchiveError;
+pub use substrate_archive_common::Error;
 pub mod chain_traits {
 	//! Traits defining functions on the client needed for indexing
 	pub use sc_client_api::client::BlockBackend;
@@ -49,18 +51,22 @@ pub struct TaskExecutor;
 
 impl futures::task::Spawn for TaskExecutor {
 	fn spawn_obj(&self, future: futures::task::FutureObj<'static, ()>) -> Result<(), futures::task::SpawnError> {
-		smol::spawn(future).detach();
+		smol::Task::spawn(future).detach();
 		Ok(())
 	}
 }
 
 impl sp_core::traits::SpawnNamed for TaskExecutor {
-	fn spawn_blocking(&self, _: &'static str, fut: futures::future::BoxFuture<'static, ()>) {
-		smol::spawn(async move { smol::unblock(|| fut).await.await }).detach();
+	fn spawn(&self, _: &'static str, fut: std::pin::Pin<Box<dyn futures::Future<Output = ()> + Send + 'static>>) {
+		smol::Task::spawn(fut).detach()
 	}
 
-	fn spawn(&self, _: &'static str, fut: futures::future::BoxFuture<'static, ()>) {
-		smol::spawn(fut).detach()
+	fn spawn_blocking(
+		&self,
+		_: &'static str,
+		fut: std::pin::Pin<Box<dyn futures::Future<Output = ()> + Send + 'static>>,
+	) {
+		smol::Task::spawn(async move { smol::unblock!(fut).await }).detach();
 	}
 }
 

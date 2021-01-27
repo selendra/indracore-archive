@@ -1,4 +1,3 @@
-
 // Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of substrate-archive.
 
@@ -17,8 +16,8 @@
 
 //! Implements the main backend trait for ReadOnlyBackend struct
 
-use std::marker::PhantomData;
-
+use super::misc_backend::{OffchainStorageBackend, RealBlockImportOperation};
+use super::ReadOnlyBackend;
 use sc_client_api::{
 	backend::{Backend, PrunableStateChangesTrieStorage},
 	client::UsageInfo,
@@ -29,19 +28,16 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justification,
 };
-
+use std::marker::PhantomData;
 use substrate_archive_common::ReadOnlyDB;
-
-use super::misc_backend::{OffchainStorageBackend, RealBlockImportOperation};
-use crate::read_only_backend::ReadOnlyBackend;
 
 type ChainResult<T> = Result<T, BlockchainError>;
 
 impl<Block: BlockT, D: ReadOnlyDB + 'static> Backend<Block> for ReadOnlyBackend<Block, D> {
 	type BlockImportOperation = RealBlockImportOperation<D>;
+	type OffchainStorage = OffchainStorageBackend;
 	type Blockchain = Self;
 	type State = super::state_backend::TrieState<Block, D>;
-	type OffchainStorage = OffchainStorageBackend;
 
 	fn begin_operation(&self) -> ChainResult<Self::BlockImportOperation> {
 		log::warn!("Block import operations are not supported for Read Only Backend");
@@ -103,7 +99,7 @@ impl<Block: BlockT, D: ReadOnlyDB + 'static> Backend<Block> for ReadOnlyBackend<
 
 		match self.state_at(hash) {
 			Some(v) => Ok(v),
-			None => Err(BlockchainError::StateDatabase(format!("No state found for block {:?}", hash))),
+			None => Err(BlockchainError::Msg(format!("No state found for block {:?}", hash))),
 		}
 	}
 
@@ -113,7 +109,7 @@ impl<Block: BlockT, D: ReadOnlyDB + 'static> Backend<Block> for ReadOnlyBackend<
 		_revert_finalized: bool,
 	) -> ChainResult<(NumberFor<Block>, std::collections::HashSet<Block::Hash>)> {
 		log::warn!("Reverting blocks not supported for a read only backend");
-		Err(BlockchainError::Backend("Reverting blocks not supported".into()))
+		Err(BlockchainError::Msg("Reverting blocks not supported".into()))
 	}
 
 	fn get_import_lock(&self) -> &parking_lot::RwLock<()> {

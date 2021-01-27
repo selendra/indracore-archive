@@ -13,30 +13,44 @@
 // You should have received a copy of the GNU General Public License
 // along with substrate-archive.  If not, see <http://www.gnu.org/licenses/>.
 
-mod archive;
 mod cli_opts;
 mod config;
 
+use anyhow::Result;
+use node_indracore_runtime::{self as runtime, Block};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
+use substrate_archive::{Archive, ArchiveBuilder};
 use substrate_archive_backend::SecondaryRocksDB;
 
-pub fn main() -> anyhow::Result<()> {
-	let config = config::Config::new()?;
-	substrate_archive::init_logger(config.cli().log_level, log::LevelFilter::Debug)?;
+pub fn main() -> Result<()> {
+    let config = config::Config::new()?;
+    substrate_archive::init_logger(config.cli().log_level, log::LevelFilter::Debug)?;
 
-	let mut archive = archive::run_archive::<SecondaryRocksDB>(config)?;
-	archive.drive()?;
-	let running = Arc::new(AtomicBool::new(true));
-	let r = running.clone();
+    let archive = ArchiveBuilder::<
+        Block,
+        runtime::RuntimeApi,
+        node_executor::Executor,
+        SecondaryRocksDB,
+    > {
+        block_workers: config.block_workers(),
+        wasm_pages: config.wasm_pages(),
+        cache_size: config.cache_size(),
+        ..ArchiveBuilder::default()
+    }
+    .chain_data_db(config.db_path().to_str().unwrap().to_string())
+    .pg_url(config.psql_conf().url())
+    .chain_spec(Box::new(config.cli().chain_spec.clone()))
+    .build()?;
 
-	ctrlc::set_handler(move || {
-		r.store(false, Ordering::SeqCst);
-	})
-	.expect("Error setting Ctrl-C handler");
-	while running.load(Ordering::SeqCst) {}
-	archive.boxed_shutdown()?;
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
 
-	Ok(())
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Error setting Ctrl-C handler");
+    while running.load(Ordering::SeqCst) {}
+    archive.shutdown()?;
+    Ok(())
 }

@@ -18,14 +18,15 @@
 //! Messages that return nothing but an error may be sent to an asyncronous pool of actors
 //! if state is an actor may be pulled out of the pool
 
-use std::collections::VecDeque;
-
 use futures::{
-	future::{BoxFuture, Future, FutureExt},
+	future::{Future, FutureExt},
 	sink::SinkExt,
 	stream::StreamExt,
 };
-use xtra::{prelude::*, spawn::Smol, Disconnected, WeakAddress};
+use std::collections::VecDeque;
+use std::pin::Pin;
+use xtra::prelude::*;
+use xtra::{Disconnected, WeakAddress};
 
 // TODO: Could restart actors which have panicked
 // TODO: If an actor disconnects remove it from the queue
@@ -42,7 +43,7 @@ impl<A: Actor + Send + Clone> ActorPool<A> {
 		let mut queue = VecDeque::with_capacity(size);
 		for _ in 0..size {
 			let a = actor.clone();
-			queue.push_back(a.create(None).spawn(&mut Smol::Global))
+			queue.push_back(a.spawn())
 		}
 
 		Self { queue, pure_actor: actor }
@@ -54,7 +55,7 @@ impl<A: Actor + Send + Clone> ActorPool<A> {
 		self.queue.reserve(n);
 		for _ in 0..n {
 			let a = self.pure_actor.clone();
-			self.queue.push_back(a.create(None).spawn(&mut Smol::Global))
+			self.queue.push_back(a.spawn())
 		}
 	}
 
@@ -74,7 +75,7 @@ impl<A: Actor + Send + Clone> ActorPool<A> {
 	/// and is not taken out. WeakAddresses can be used to
 	/// communicate directly with a single actor.
 	///
-	/// This has the possibility of interrupting the pooled actors
+	/// This has the possiblity of interrupting the pooled actors
 	/// if many tasks are sent to the one actor.
 	///
 	/// # None
@@ -86,7 +87,7 @@ impl<A: Actor + Send + Clone> ActorPool<A> {
 
 	/// Forward a message to one of the spawned actors
 	/// and advance the state of the futures in queue.
-	pub fn forward<M>(&mut self, msg: M) -> BoxFuture<'static, M::Result>
+	pub fn forward<M>(&mut self, msg: M) -> Pin<Box<dyn Future<Output = M::Result> + Send + 'static>>
 	where
 		M: Message + std::fmt::Debug + Send,
 		M::Result: std::fmt::Debug + Unpin + Send,
@@ -97,7 +98,9 @@ impl<A: Actor + Send + Clone> ActorPool<A> {
 	}
 }
 
-fn spawn<R>(fut: impl Future<Output = Result<R, Disconnected>> + Send + 'static) -> BoxFuture<'static, R>
+fn spawn<R>(
+	fut: impl Future<Output = Result<R, Disconnected>> + Send + 'static,
+) -> Pin<Box<dyn Future<Output = R> + Send + 'static>>
 where
 	R: Send + 'static + Unpin + std::fmt::Debug,
 {
@@ -106,7 +109,7 @@ where
 	// `Sync` Cell<bool>
 	let (mut tx, mut rx) = futures::channel::mpsc::channel(0);
 
-	let handle = smol::spawn(async move { rx.next().await.expect("One Shot") });
+	let handle = smol::Task::spawn(async move { rx.next().await.expect("One Shot") });
 	let fut = async move {
 		match fut.await {
 			Ok(v) => {
@@ -117,7 +120,7 @@ where
 			}
 		};
 	};
-	smol::spawn(fut).detach();
+	smol::Task::spawn(fut).detach();
 	handle.boxed()
 }
 
@@ -131,7 +134,7 @@ impl<M> Message for PoolMessage<M>
 where
 	M: Message + Send + Unpin + std::fmt::Debug,
 {
-	type Result = BoxFuture<'static, M::Result>;
+	type Result = Pin<Box<dyn Future<Output = M::Result> + Send + 'static>>;
 }
 
 #[async_trait::async_trait]
@@ -141,7 +144,11 @@ where
 	M: Message + Send + std::fmt::Debug + Unpin,
 	M::Result: Unpin + std::fmt::Debug,
 {
-	async fn handle(&mut self, msg: PoolMessage<M>, _: &mut Context<Self>) -> BoxFuture<'static, M::Result> {
+	async fn handle(
+		&mut self,
+		msg: PoolMessage<M>,
+		_: &mut Context<Self>,
+	) -> Pin<Box<dyn Future<Output = M::Result> + Send + 'static>> {
 		self.forward(msg.0)
 	}
 }

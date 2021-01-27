@@ -16,11 +16,11 @@
 use std::{env, io};
 use thiserror::Error;
 
-pub type Result<T, E = ArchiveError> = std::result::Result<T, E>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Substrate Archive Error Enum
 #[derive(Error, Debug)]
-pub enum ArchiveError {
+pub enum Error {
 	#[error("Io Error")]
 	Io(#[from] io::Error),
 	#[error("environment variable for `DATABASE_URL` not found")]
@@ -46,7 +46,7 @@ pub enum ArchiveError {
 	BgJobGet(#[from] coil::FetchError),
 	#[error("could not build threadpool")]
 	ThreadPool(#[from] rayon::ThreadPoolBuildError),
-	/// Error occurred while serializing/deserializing data
+	/// Error occured while serializing/deserializing data
 	#[error("Error while decoding job data {0}")]
 	De(#[from] rmp_serde::decode::Error),
 	#[error(
@@ -67,34 +67,34 @@ pub enum ArchiveError {
 	Bincode(#[from] Box<bincode::ErrorKind>),
 }
 
-impl From<&str> for ArchiveError {
-	fn from(e: &str) -> ArchiveError {
-		ArchiveError::Msg(e.to_string())
+impl From<&str> for Error {
+	fn from(e: &str) -> Error {
+		Error::Msg(e.to_string())
 	}
 }
 
-impl From<String> for ArchiveError {
-	fn from(e: String) -> ArchiveError {
-		ArchiveError::Msg(e)
+impl From<String> for Error {
+	fn from(e: String) -> Error {
+		Error::Msg(e)
 	}
 }
 
 // this conversion is required for our Error type to be
 // Send + Sync
-impl From<sp_blockchain::Error> for ArchiveError {
-	fn from(e: sp_blockchain::Error) -> ArchiveError {
-		ArchiveError::Blockchain(e.to_string())
+impl From<sp_blockchain::Error> for Error {
+	fn from(e: sp_blockchain::Error) -> Error {
+		Error::Blockchain(e.to_string())
 	}
 }
 
-impl From<xtra::Disconnected> for ArchiveError {
-	fn from(_: xtra::Disconnected) -> ArchiveError {
-		ArchiveError::Disconnected
+impl From<xtra::Disconnected> for Error {
+	fn from(_: xtra::Disconnected) -> Error {
+		Error::Disconnected
 	}
 }
 
-impl<T> From<flume::SendError<T>> for ArchiveError {
-	fn from(_: flume::SendError<T>) -> ArchiveError {
-		ArchiveError::Channel
+impl<T> From<flume::SendError<T>> for Error {
+	fn from(_: flume::SendError<T>) -> Error {
+		Error::Channel
 	}
 }

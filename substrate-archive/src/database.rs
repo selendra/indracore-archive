@@ -21,19 +21,16 @@ mod batch;
 pub mod listener;
 pub mod queries;
 
-use std::time::Duration;
-
 use async_trait::async_trait;
+use batch::Batch;
 use codec::Encode;
+use sp_runtime::traits::{Block as BlockT, Header as _, NumberFor};
 use sqlx::prelude::*;
 use sqlx::{postgres::PgPoolOptions, PgPool, Postgres};
+use substrate_archive_common::{models, types::*, Result};
 
-use sp_runtime::traits::{Block as BlockT, Header as _, NumberFor};
-
-use substrate_archive_common::{models::StorageModel, types::*, Result};
-
-use self::batch::Batch;
 pub use self::listener::*;
+pub use self::models::*;
 
 pub type DbReturn = Result<u64>;
 pub type DbConn = sqlx::pool::PoolConnection<Postgres>;
@@ -58,7 +55,7 @@ impl Database {
 		let pool = PgPoolOptions::new()
 			.min_connections(4)
 			.max_connections(28)
-			.idle_timeout(Duration::from_millis(3600)) // kill connections after 3.6 seconds of idle
+			.idle_timeout(std::time::Duration::from_millis(3600)) // kill connections after 5 minutes of idle
 			.connect(url.as_str())
 			.await?;
 		Ok(Self { pool, url })
@@ -147,7 +144,7 @@ where
             ON CONFLICT DO NOTHING
             "#,
 		);
-		for b in self.inner {
+		for b in self.inner.into_iter() {
 			batch.reserve(8)?;
 			if batch.current_num_arguments() > 0 {
 				batch.append(",");
@@ -228,7 +225,7 @@ impl<B: BlockT> Insert for Vec<StorageModel<B>> {
             "#,
 		);
 
-		for s in self {
+		for s in self.into_iter() {
 			batch.reserve(5)?;
 			if batch.current_num_arguments() > 0 {
 				batch.append(",");
@@ -272,4 +269,5 @@ impl Insert for Metadata {
 #[cfg(test)]
 mod tests {
 	//! Must be connected to a local database
+	use super::*;
 }

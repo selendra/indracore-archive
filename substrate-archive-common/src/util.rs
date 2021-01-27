@@ -16,14 +16,12 @@
 
 //! logging and general utilities
 
+use crate::error::Error as ArchiveError;
+#[cfg(feature = "logging")]
+use fern::colors::{Color, ColoredLevelConfig};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher as _;
 use std::path::{Path, PathBuf};
-
-#[cfg(feature = "logging")]
-use fern::colors::{Color, ColoredLevelConfig};
-
-use crate::error::ArchiveError;
 
 #[cfg(feature = "logging")]
 pub fn init_logger(std: log::LevelFilter, file: log::LevelFilter) -> Result<(), ArchiveError> {
@@ -117,7 +115,7 @@ pub fn create_dir(path: &Path) -> Result<(), ArchiveError> {
 	Ok(())
 }
 
-/// Make a hash out of a byte string using the default hasher.
+/// Make a hash out of a byte string using the default hasher
 pub fn make_hash<K: std::hash::Hash + ?Sized>(val: &K) -> u64 {
 	let mut state = DefaultHasher::new();
 	val.hash(&mut state);

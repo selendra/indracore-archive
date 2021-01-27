@@ -19,15 +19,12 @@
 //! and executes each tasks in each queue on each
 //! listen wakeup.
 
-use std::{fmt::Display, str::FromStr, time::Duration};
-
-use futures::{future::BoxFuture, FutureExt, StreamExt};
-use serde::{Deserialize, Deserializer, Serialize};
-use sqlx::{
-	postgres::{PgConnection, PgListener, PgNotification},
-	prelude::*,
-};
-
+use futures::{Future, FutureExt, StreamExt};
+use serde::{Deserialize, Serialize};
+use serde_aux::prelude::*;
+use sqlx::postgres::{PgConnection, PgListener, PgNotification};
+use sqlx::prelude::*;
+use std::pin::Pin;
 use substrate_archive_common::Result;
 
 /// A notification from Postgres about a new row
@@ -39,37 +36,21 @@ pub struct Notif {
 	pub id: i32,
 }
 
-fn deserialize_number_from_string<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-where
-	D: Deserializer<'de>,
-	T: FromStr + Deserialize<'de>,
-	<T as FromStr>::Err: Display,
-{
-	#[derive(Deserialize)]
-	#[serde(untagged)]
-	enum StringOrInt<T> {
-		String(String),
-		Number(T),
-	}
-
-	match StringOrInt::<T>::deserialize(deserializer)? {
-		StringOrInt::String(s) => s.parse::<T>().map_err(serde::de::Error::custom),
-		StringOrInt::Number(i) => Ok(i),
-	}
-}
-
 #[derive(PartialEq, Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
 pub enum Table {
+	#[serde(rename = "blocks")]
 	Blocks,
+	#[serde(rename = "storage")]
 	Storage,
 }
 
 #[derive(PartialEq, Debug, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
 pub enum Action {
+	#[serde(rename = "INSERT")]
 	Insert,
+	#[serde(rename = "UPDATE")]
 	Update,
+	#[serde(rename = "DELETE")]
 	Delete,
 }
 
@@ -95,7 +76,10 @@ struct ListenEvent {
 
 pub struct Builder<F>
 where
-	F: 'static + Send + Sync + for<'a> Fn(Notif, &'a mut PgConnection) -> BoxFuture<'a, Result<()>>,
+	F: 'static
+		+ Send
+		+ Sync
+		+ for<'a> Fn(Notif, &'a mut PgConnection) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>,
 {
 	task: F,
 	channels: Vec<Channel>,
@@ -104,7 +88,10 @@ where
 
 impl<F> Builder<F>
 where
-	F: 'static + Send + Sync + for<'a> Fn(Notif, &'a mut PgConnection) -> BoxFuture<'a, Result<()>>,
+	F: 'static
+		+ Send
+		+ Sync
+		+ for<'a> Fn(Notif, &'a mut PgConnection) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>,
 {
 	pub fn new(url: &str, f: F) -> Self {
 		Self { task: f, channels: Vec::new(), pg_url: url.to_string() }
@@ -117,7 +104,7 @@ where
 
 	/// Spawns this listener which will work on its assigned tasks in the background
 	pub async fn spawn(self) -> Result<Listener> {
-		let (tx, rx) = flume::bounded(1);
+		let (tx, mut rx) = flume::bounded(1);
 
 		let mut listener = PgListener::connect(&self.pg_url).await?;
 		let channels = self.channels.iter().map(String::from).collect::<Vec<String>>();
@@ -158,9 +145,9 @@ where
 			}
 			// collect the rest of the results, before exiting, as long as the collection completes
 			// in a reasonable amount of time
-			let timeout = smol::Timer::after(Duration::from_secs(1));
+			let timeout = smol::Timer::new(std::time::Duration::from_secs(1));
 			futures::select! {
-				_ = FutureExt::fuse(timeout) => {},
+				_ = timeout.fuse() => {},
 				notifs = listener.collect::<Vec<_>>().fuse() => {
 					for msg in notifs {
 						self.handle_listen_event(msg.unwrap(), &mut conn).await;
@@ -169,12 +156,12 @@ where
 			}
 		};
 
-		smol::spawn(fut).detach();
+		smol::Task::spawn(fut).detach();
 
 		Ok(Listener { tx })
 	}
 
-	/// Handle a listen event from Postgres
+	/// Handle a listen event from Postges
 	async fn handle_listen_event(&self, notif: PgNotification, conn: &mut PgConnection) {
 		let payload: Notif = serde_json::from_str(notif.payload()).unwrap();
 		(self.task)(payload, conn).await.unwrap();
@@ -192,7 +179,10 @@ pub struct Listener {
 impl Listener {
 	pub fn builder<F>(pg_url: &str, f: F) -> Builder<F>
 	where
-		F: 'static + Send + Sync + for<'a> Fn(Notif, &'a mut PgConnection) -> BoxFuture<'a, Result<()>>,
+		F: 'static
+			+ Send
+			+ Sync
+			+ for<'a> Fn(Notif, &'a mut PgConnection) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>,
 	{
 		Builder::new(pg_url, f)
 	}
@@ -246,13 +236,12 @@ mod tests {
 					.execute(&mut conn)
 					.await
 					.expect("Could not exec notify query");
-				smol::Timer::after(Duration::from_millis(50)).await;
+				smol::Timer::new(std::time::Duration::from_millis(50)).await;
 			}
 			let mut counter: usize = 0;
 
 			loop {
-				let timeout = smol::Timer::after(Duration::from_millis(75));
-				let mut timeout = FutureExt::fuse(timeout);
+				let mut timeout = smol::Timer::new(std::time::Duration::from_millis(75)).fuse();
 				futures::select!(
 					_ = rx.next() => counter += 1,
 					_ = timeout => break,

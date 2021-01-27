@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with substrate-archive.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-
 use sc_client_api::backend;
 use sp_api::{ApiExt, ApiRef};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -24,7 +22,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header, NumberFor},
 };
 use sp_storage::{StorageData, StorageKey as StorageKeyWrapper};
-
+use std::sync::Arc;
 use substrate_archive_common::{types::Storage, Result};
 
 pub type StorageKey = Vec<u8>;
@@ -42,6 +40,11 @@ pub struct BlockChanges<Block: BlockT> {
 	/// Hash of the block these changes come from
 	pub block_hash: Block::Hash,
 	pub block_num: NumberFor<Block>,
+}
+
+impl<B: BlockT> xtra::Message for BlockChanges<B> {
+	// TODO: possibly change this error
+	type Result = ();
 }
 
 impl<Block> From<BlockChanges<Block>> for Storage<Block>

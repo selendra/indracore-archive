@@ -16,16 +16,14 @@
 
 //! A method of dynamic queries with SQLx
 //! Taken from this Gist by @mehcode (Github): https://gist.github.com/mehcode/c476922be0290a4f8502d18701cc8c74
-//! This is sort of temporary until SQLx develops their dynamic query builder: https://github.com/launchbadge/sqlx/issues/291
+//! This is sortof temporary until SQLx develops their dynamic query builder: https://github.com/launchbadge/sqlx/issues/291
 //! and `Quaint` switches to SQLx as a backend: https://github.com/prisma/quaint/issues/138
-
+use sqlx::prelude::*;
 use sqlx::{
 	encode::Encode,
 	postgres::{PgArguments, PgConnection, Postgres},
-	prelude::*,
 	Arguments,
 };
-
 use substrate_archive_common::Result;
 
 const CHUNK_MAX: usize = 30_000;
@@ -36,36 +34,6 @@ pub struct Chunk {
 
 	// FIXME: Would be nice if PgArguments exposed the # of args as `.len()`
 	pub args_len: usize,
-}
-
-impl Chunk {
-	fn new(sql: &str) -> Self {
-		let mut query = String::with_capacity(1024 * 8);
-		query.push_str(sql);
-
-		Self { query, arguments: PgArguments::default(), args_len: 0 }
-	}
-
-	pub fn append(&mut self, sql: &str) {
-		self.query.push_str(sql);
-	}
-
-	pub fn bind<'a, T: 'a>(&mut self, value: T) -> Result<()>
-	where
-		T: Encode<'a, Postgres> + Type<Postgres> + Send,
-	{
-		self.arguments.add(value);
-		self.query.push('$');
-		itoa::fmt(&mut self.query, self.args_len + 1)?;
-		self.args_len += 1;
-
-		Ok(())
-	}
-
-	async fn execute(self, conn: &mut PgConnection) -> Result<u64> {
-		let done = sqlx::query_with(&*self.query, self.arguments.into_arguments()).execute(conn).await?;
-		Ok(done.rows_affected())
-	}
 }
 
 pub struct Batch {
@@ -158,5 +126,35 @@ impl Batch {
 	// TODO: Better name?
 	pub fn current_num_arguments(&self) -> usize {
 		self.chunks[self.index].args_len
+	}
+}
+
+impl Chunk {
+	fn new(sql: &str) -> Self {
+		let mut query = String::with_capacity(1024 * 8);
+		query.push_str(sql);
+
+		Self { query, arguments: PgArguments::default(), args_len: 0 }
+	}
+
+	pub fn append(&mut self, sql: &str) {
+		self.query.push_str(sql);
+	}
+
+	pub fn bind<'a, T: 'a>(&mut self, value: T) -> Result<()>
+	where
+		T: Encode<'a, Postgres> + Type<Postgres> + Send,
+	{
+		self.arguments.add(value);
+		self.query.push('$');
+		itoa::fmt(&mut self.query, self.args_len + 1)?;
+		self.args_len += 1;
+
+		Ok(())
+	}
+
+	async fn execute(self, conn: &mut PgConnection) -> Result<u64> {
+		let done = sqlx::query_with(&*self.query, self.arguments.into_arguments()).execute(conn).await?;
+		Ok(done.rows_affected())
 	}
 }

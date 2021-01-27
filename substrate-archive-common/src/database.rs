@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with substrate-archive.  If not, see <http://www.gnu.org/licenses/>.
 
+use super::Result;
 use std::{marker::Sized, path::PathBuf};
-
-use crate::error::Result;
 
 pub type KeyValuePair = (Box<[u8]>, Box<[u8]>);
 

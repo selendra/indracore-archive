@@ -14,11 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with substrate-archive.  If not, see <http://www.gnu.org/licenses/>.
 
-mod database;
-mod error;
-pub mod models;
-pub mod msg;
-pub mod types;
-pub mod util;
-pub use database::{KeyValuePair, ReadOnlyDB, NUM_COLUMNS};
-pub use error::{Error, Result};
+use sp_runtime::traits::Block as BlockT;
+use substrate_archive_common::{ReadOnlyDB, Result};
+
+#[async_trait::async_trait(?Send)]
+pub trait Archive<B: BlockT + Unpin, D: ReadOnlyDB>
+where
+	B::Hash: Unpin,
+{
+	/// start driving the execution of the archive
+	fn drive(&mut self) -> Result<()>;
+
+	/// this method will block indefinitely
+	async fn block_until_stopped(&self) -> ();
+
+	/// shutdown the system
+	fn shutdown(self) -> Result<()>;
+
+	/// Shutdown the system when self is boxed (useful when erasing the types of the runtime)
+	fn boxed_shutdown(self: Box<Self>) -> Result<()>;
+
+	/// Get a reference to the context the actors are using
+	fn context(&self) -> Result<super::actors::ActorContext<B, D>>;
+}

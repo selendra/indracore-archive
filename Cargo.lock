@@ -801,6 +801,7 @@ dependencies = [
  "textwrap",
  "unicode-width",
  "vec_map",
+ "yaml-rust",
 ]
 
 [[package]]
@@ -1081,6 +1082,16 @@ checksum = "7fbaabec2c953050352311293be5c6aba8e141ba19d6811862b232d6fd020484"
 dependencies = [
  "quote 1.0.7",
  "syn 1.0.60",
+]
+
+[[package]]
+name = "ctrlc"
+version = "3.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b57a92e9749e10f25a171adcebfafe72991d45e7ec2dcb853e8f83d9dafaeb08"
+dependencies = [
+ "nix 0.18.0",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2346,6 +2357,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "indracore-archive"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ctrlc",
+ "indracore-service",
+ "log",
+ "sc-chain-spec",
+ "serde",
+ "substrate-archive",
+ "substrate-archive-backend",
+ "substrate-archive-common",
+ "toml",
+]
+
+[[package]]
 name = "indracore-core-primitives"
 version = "0.7.30"
 source = "git+https://github.com/selendra/indracore-dev?branch=main#cbd216aa33a9b69aae99535104676d8b1d66cc2a"
@@ -3587,7 +3615,7 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.13"
+version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcf3805d4480bb5b86070dcfeb9e2cb2ebc148adb753c5cca5f884d1d65a42b2"
 dependencies = [
@@ -3960,6 +3988,18 @@ dependencies = [
  "gcc",
  "libc",
  "void",
+]
+
+[[package]]
+name = "nix"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83450fe6a6142ddd95fb064b746083fc4ef1705fe81f64a64e1d4b39f54a1055"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if 0.1.10",
+ "libc",
 ]
 
 [[package]]
@@ -6956,7 +6996,7 @@ dependencies = [
  "libc",
  "log",
  "memrange",
- "nix",
+ "nix 0.10.0",
  "quick-error",
  "rand 0.4.6",
  "shared_memory_derive",
@@ -8796,7 +8836,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04f8ab788026715fa63b31960869617cba39117e520eb415b0139543e325ab59"
 dependencies = [
  "cfg-if 0.1.10",
- "rand 0.3.23",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
@@ -9384,6 +9424,12 @@ dependencies = [
  "pollster",
  "smol",
 ]
+
+[[package]]
+name = "yaml-rust"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e66366e18dc58b46801afbf2ca7661a9f59cc8c5962c29892b6039b4f86fa992"
 
 [[package]]
 name = "yamux"
